@@ -16,18 +16,18 @@ function MapDisplay({ params }) {
     setImgUrl(null);
     if (params.task === 'slr-risk') {
       const threshold = params.threshold !== undefined ? params.threshold : 2.0;
-      fetch(`https://dataground2025.vercel.app/gee/slr-risk?threshold=${threshold}`)
+      fetch(`https://web-production-f8e1.up.railway.app/gee/slr-risk?threshold=${threshold}`)
         .then(res => res.json())
         .then(data => setImgUrl(data.url));
     } else if (params.task === 'urban-area') {
       const year = params.year1;
-      fetch(`https://dataground2025.vercel.app/gee/urban-area-map?year=${year}`)
+      fetch(`https://web-production-f8e1.up.railway.app/gee/urban-area-map?year=${year}`)
         .then(res => res.json())
         .then(data => setImgUrl(data.url));
     } else if (params.task === 'urban-area-comprehensive') {
       const year = params.year2; // Use end year for the map display
       const threshold = params.threshold !== undefined ? params.threshold : 2.0;
-      fetch(`https://dataground2025.vercel.app/gee/urban-area-risk-combined-map?year=${year}&threshold=${threshold}`)
+      fetch(`https://web-production-f8e1.up.railway.app/gee/urban-area-risk-combined-map?year=${year}&threshold=${threshold}`)
         .then(res => res.json())
         .then(data => setImgUrl(data.url));
     }

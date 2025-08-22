@@ -8,7 +8,7 @@ function UrbanAreaComprehensiveCharts({ startYear, endYear }) {
   useEffect(() => {
     if (!startYear || !endYear) return;
     setError(null);
-    fetch(`https://dataground2025.vercel.app/gee/urban-area-comprehensive-stats?start_year=${startYear}&end_year=${endYear}`)
+    fetch(`https://web-production-f8e1.up.railway.app/gee/urban-area-comprehensive-stats?start_year=${startYear}&end_year=${endYear}`)
       .then(res => {
         if (!res.ok) throw new Error('Invalid year range or server error');
         return res.json();

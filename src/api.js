@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = 'https://dataground2025.vercel.app';
+const API_BASE = 'https://web-production-f8e1.up.railway.app';
 
 export const login = async (email, password) => {
   const res = await axios.post(`${API_BASE}/auth/login`, { email, password });
