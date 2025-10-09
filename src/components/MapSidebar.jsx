@@ -8,7 +8,7 @@ const TASKS = [
   { value: 'topic-modeling', label: 'Topic Modeling', years: 0, minYear: 0, maxYear: 0 },
 ];
 
-function MapSidebar({ onAnalyze }) {
+function MapSidebar({ onAnalyze, initialParams = null }) {
   const [task, setTask] = useState(TASKS[0].value);
   const [year1, setYear1] = useState(2020);
   const [year2, setYear2] = useState(2020);
@@ -56,6 +56,38 @@ function MapSidebar({ onAnalyze }) {
     };
     loadCountries();
   }, []);
+
+  // Handle initial parameters from ADK
+  useEffect(() => {
+    if (initialParams) {
+      console.log('🔧 [MapSidebar] Setting initial parameters from ADK:', initialParams);
+      
+      // Set task
+      if (initialParams.task) {
+        setTask(initialParams.task);
+      }
+      
+      // Set year
+      if (initialParams.year1) {
+        setYear1(parseInt(initialParams.year1));
+      }
+      
+      // Set threshold
+      if (initialParams.threshold) {
+        setThreshold(parseFloat(initialParams.threshold));
+      }
+      
+      // Set country
+      if (initialParams.country) {
+        setSelectedCountry(initialParams.country);
+      }
+      
+      // Set city
+      if (initialParams.city) {
+        setSelectedCity(initialParams.city);
+      }
+    }
+  }, [initialParams]);
 
   // Load cities when country changes
   useEffect(() => {
