@@ -17,6 +17,13 @@ function ChatWindow({ messages, onSend, loading }) {
   const handleSend = async (e) => {
     e.preventDefault();
     if ((input.trim() === '' && !file) || sending || loading) return;
+    
+    // 중복 요청 방지
+    if (sending) {
+      console.log('Message already being sent, ignoring duplicate request');
+      return;
+    }
+    
     setSending(true);
     await onSend(input, file);
     setInput('');
@@ -27,6 +34,11 @@ function ChatWindow({ messages, onSend, loading }) {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // 중복 요청 방지
+      if (sending || loading) {
+        console.log('Message already being sent, ignoring Enter key');
+        return;
+      }
       handleSend(e);
     }
   };

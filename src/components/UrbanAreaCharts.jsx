@@ -11,7 +11,7 @@ function UrbanAreaCharts({ year }) {
   useEffect(() => {
     if (!year) return;
     setError(null);
-    fetch(`https://web-production-f8e1.up.railway.app/gee/urban-area-stats?year=${year}`)
+    fetch(`https://web-production-f8e1.up.railway.app/analysis/urban-area-stats?year=${year}`)
       .then(res => {
         if (!res.ok) throw new Error('Invalid year or server error');
         return res.json();

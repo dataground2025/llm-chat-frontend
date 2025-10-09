@@ -11,7 +11,7 @@ function UrbanExpansionCharts({ year1, year2 }) {
   useEffect(() => {
     if (!year1 || !year2) return;
     setError(null);
-    fetch(`https://web-production-f8e1.up.railway.app/gee/urban-expansion-stats?start_year=${year1}&end_year=${year2}`)
+    fetch(`https://web-production-f8e1.up.railway.app/analysis/urban-expansion-stats?start_year=${year1}&end_year=${year2}`)
       .then(res => {
         if (!res.ok) throw new Error('Invalid year range or server error');
         return res.json();
