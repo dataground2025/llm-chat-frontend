@@ -23,7 +23,12 @@ function MapDisplay({ params }) {
       console.log('❌ [MapDisplay] No params, returning');
       return;
     }
+    
+    // 매 분석 호출마다 모든 지도 상태 초기화
+    console.log('🔄 [MapDisplay] Resetting all map states');
     setImgUrl(null);
+    setMapCenter(null);
+    setCityBounds(JAKARTA_BOUNDS);
     
     const loadAnalysis = async () => {
       try {
@@ -96,10 +101,8 @@ function MapDisplay({ params }) {
           setImgUrl(data.url);
         } else if (params.task === 'urban-area') {
           const year = params.year1;
-          const minLat = lat - buffer;
-          const minLng = lng - buffer;
-          const maxLat = lat + buffer;
-          const maxLng = lng + buffer;
+          const bbox = calculateStandardBbox(lat, lng, params.task);
+          const { minLat, minLng, maxLat, maxLng } = bbox;
           
           const response = await fetch(`https://web-production-f8e1.up.railway.app/analysis/urban-area-map?year=${year}&min_lat=${minLat}&min_lon=${minLng}&max_lat=${maxLat}&max_lon=${maxLng}`);
           const data = await response.json();
@@ -107,10 +110,8 @@ function MapDisplay({ params }) {
         } else if (params.task === 'urban-area-comprehensive') {
           const year = params.year2; // Use end year for the map display
           const threshold = params.threshold !== undefined ? params.threshold : 2.0;
-          const minLat = lat - buffer;
-          const minLng = lng - buffer;
-          const maxLat = lat + buffer;
-          const maxLng = lng + buffer;
+          const bbox = calculateStandardBbox(lat, lng, params.task);
+          const { minLat, minLng, maxLat, maxLng } = bbox;
           
           const response = await fetch(`https://web-production-f8e1.up.railway.app/analysis/urban-area-risk-combined-map?year=${year}&threshold=${threshold}&min_lat=${minLat}&min_lon=${minLng}&max_lat=${maxLat}&max_lon=${maxLng}`);
           const data = await response.json();
@@ -131,7 +132,7 @@ function MapDisplay({ params }) {
     
     loadAnalysis();
     // Infrastructure exposure has its own map component, so we don't need to fetch a map here
-  }, [params]);
+  }, [params?.city, params?.task, params?.year1, params?.year2, params?.threshold]);
 
   if (!params) return <div>Please select options and click Analyze it.</div>;
 
@@ -161,7 +162,7 @@ function MapDisplay({ params }) {
       )}
       <div style={{ height: 500, width: '100%' }}>
         <MapContainer
-          key={mapCenter ? `${mapCenter[0]}-${mapCenter[1]}` : 'default'}
+          key={`${params?.city}-${params?.task}-${params?.year1}-${params?.year2}-${params?.threshold}-${Date.now()}`}
           center={mapCenter || [-6.227, 106.83]}
           zoom={10}
           style={{ height: '100%', width: '100%' }}
