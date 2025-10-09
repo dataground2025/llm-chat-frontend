@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 function UrbanAreaComprehensiveCharts({ startYear, endYear }) {
   const [data, setData] = useState(null);
@@ -8,7 +8,7 @@ function UrbanAreaComprehensiveCharts({ startYear, endYear }) {
   useEffect(() => {
     if (!startYear || !endYear) return;
     setError(null);
-    fetch(`https://web-production-f8e1.up.railway.app/gee/urban-area-comprehensive-stats?start_year=${startYear}&end_year=${endYear}`)
+    fetch(`https://web-production-f8e1.up.railway.app/analysis/urban-area-comprehensive-stats?start_year=${startYear}&end_year=${endYear}`)
       .then(res => {
         if (!res.ok) throw new Error('Invalid year range or server error');
         return res.json();
@@ -23,7 +23,41 @@ function UrbanAreaComprehensiveCharts({ startYear, endYear }) {
           population_in_urban_risk: json.populations_in_urban_risk[i],
           total_population: json.total_populations[i],
         }));
-        setData({ ...json, chartData });
+        
+        // Calculate growth percentages
+        const growthData = chartData.slice(1).map((current, i) => {
+          const previous = chartData[i];
+          
+          // Population growth rates
+          const totalPopulationGrowth = previous.total_population > 0 
+            ? ((current.total_population - previous.total_population) / previous.total_population) * 100 
+            : 0;
+          const populationInUrbanGrowth = previous.population_in_urban > 0 
+            ? ((current.population_in_urban - previous.population_in_urban) / previous.population_in_urban) * 100 
+            : 0;
+          const populationInUrbanRiskGrowth = previous.population_in_urban_risk > 0 
+            ? ((current.population_in_urban_risk - previous.population_in_urban_risk) / previous.population_in_urban_risk) * 100 
+            : 0;
+          
+          // Urban area growth rates
+          const urbanAreaGrowth = previous.urban_area > 0 
+            ? ((current.urban_area - previous.urban_area) / previous.urban_area) * 100 
+            : 0;
+          const urbanAreaInRiskGrowth = previous.urban_area_in_risk > 0 
+            ? ((current.urban_area_in_risk - previous.urban_area_in_risk) / previous.urban_area_in_risk) * 100 
+            : 0;
+          
+          return {
+            year: current.year,
+            total_population_growth: totalPopulationGrowth,
+            population_in_urban_growth: populationInUrbanGrowth,
+            population_in_urban_risk_growth: populationInUrbanRiskGrowth,
+            urban_area_growth: urbanAreaGrowth,
+            urban_area_in_risk_growth: urbanAreaInRiskGrowth
+          };
+        });
+        
+        setData({ ...json, chartData, growthData });
       })
       .catch(err => setError(err.message));
   }, [startYear, endYear]);
@@ -175,6 +209,54 @@ function UrbanAreaComprehensiveCharts({ startYear, endYear }) {
             strokeWidth={2}
           />
         </LineChart>
+      </ResponsiveContainer>
+
+      {/* Growth Rate Charts */}
+      <h3 style={{ marginTop: 32 }}>Population Growth Rate (%)</h3>
+      <ResponsiveContainer width="100%" height={400}>
+        <BarChart data={data.growthData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="year" />
+          <YAxis label={{ value: 'Growth Rate (%)', angle: -90, position: 'insideLeft' }} />
+          <Tooltip formatter={(value) => [value.toFixed(1) + '%', 'Growth Rate']} />
+          <Legend />
+          <Bar 
+            dataKey="total_population_growth" 
+            fill="#1976d2" 
+            name="Total Population"
+          />
+          <Bar 
+            dataKey="population_in_urban_growth" 
+            fill="#4caf50" 
+            name="Population in Urban Area"
+          />
+          <Bar 
+            dataKey="population_in_urban_risk_growth" 
+            fill="#f44336" 
+            name="Population in Urban & Risk Area"
+          />
+        </BarChart>
+      </ResponsiveContainer>
+
+      <h3 style={{ marginTop: 32 }}>Urban Area Growth Rate (%)</h3>
+      <ResponsiveContainer width="100%" height={400}>
+        <BarChart data={data.growthData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="year" />
+          <YAxis label={{ value: 'Growth Rate (%)', angle: -90, position: 'insideLeft' }} />
+          <Tooltip formatter={(value) => [value.toFixed(1) + '%', 'Growth Rate']} />
+          <Legend />
+          <Bar 
+            dataKey="urban_area_growth" 
+            fill="#1976d2" 
+            name="Urban Area"
+          />
+          <Bar 
+            dataKey="urban_area_in_risk_growth" 
+            fill="#f44336" 
+            name="Urban Area in Risk"
+          />
+        </BarChart>
       </ResponsiveContainer>
 
       {/* Risk Analysis Summary */}

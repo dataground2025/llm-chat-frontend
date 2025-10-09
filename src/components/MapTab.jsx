@@ -3,6 +3,7 @@ import MapSidebar from './MapSidebar';
 import MapDisplay from './MapDisplay';
 import UrbanAreaCharts from './UrbanAreaCharts';
 import UrbanAreaComprehensiveCharts from './UrbanAreaComprehensiveCharts';
+import InfrastructureExposure from './InfrastructureExposure';
 
 function MapTab() {
   const [params, setParams] = useState(null);
@@ -21,6 +22,9 @@ function MapTab() {
         )}
         {params && params.task === 'urban-area-comprehensive' && (
           <UrbanAreaComprehensiveCharts startYear={params.year1} endYear={params.year2} />
+        )}
+        {params && params.task === 'infrastructure-exposure' && (
+          <InfrastructureExposure year={params.year1} threshold={params.threshold} city={params.city} />
         )}
       </div>
     </div>
