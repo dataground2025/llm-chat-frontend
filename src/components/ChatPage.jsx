@@ -32,6 +32,23 @@ function ChatPage({ token, onLogout }) {
     console.log('🔍 [ChatPage] Params state updated');
   };
 
+  const handleYearChange = useCallback((newYear, newEndYear = null) => {
+    console.log('🔍 [ChatPage] handleYearChange called with:', newYear, newEndYear);
+    if (params) {
+      const updatedParams = { ...params };
+      if (newEndYear !== null) {
+        // 두 개의 연도가 있는 경우 (start_year, end_year)
+        updatedParams.year1 = newYear;
+        updatedParams.year2 = newEndYear;
+      } else {
+        // 하나의 연도만 있는 경우
+        updatedParams.year1 = newYear;
+      }
+      setParams(updatedParams);
+      console.log('🔍 [ChatPage] Updated params with new year:', updatedParams);
+    }
+  }, [params]);
+
   useEffect(() => {
     const fetchChats = async () => {
       setLoadingChats(true);
@@ -152,52 +169,113 @@ function ChatPage({ token, onLogout }) {
       console.log('🔍 [ChatPage] Full AI Message received:', aiMsg);
       console.log('🔍 [ChatPage] AI Message keys:', Object.keys(aiMsg));
       console.log('🔍 [ChatPage] dashboard_updates in AI message:', aiMsg.dashboard_updates);
-      setMessages(prev => [...prev, aiMsg]);
       
-      // Handle ADK response
-      if (aiMsg.redirect_to_manual && aiMsg.manual_analysis_params) {
-        console.log('✅ ADK parameters collected, redirecting to manual analysis:', aiMsg.manual_analysis_params);
+      // Check if this is a loading message ("...")
+      const isLoadingMessage = aiMsg.content === "...";
+      
+      if (isLoadingMessage) {
+        // Add loading message and start polling for updates
+        setMessages(prev => [...prev, aiMsg]);
         
-        // Convert ADK parameters to manual analysis format
-        const taskMapping = {
-          'sea_level_rise': 'slr-risk',
-          'urban_analysis': 'urban-area-comprehensive',
-          'infrastructure_analysis': 'infrastructure-exposure',
-          'topic_modeling': 'topic-modeling'
-        };
+        // Poll for message updates every 500ms
+        const messageId = aiMsg.id;
+        const pollInterval = setInterval(async () => {
+          try {
+            const updatedMessages = await getMessages(selectedChatId, token);
+            const updatedMsg = updatedMessages.find(msg => msg.id === messageId);
+            
+            if (updatedMsg && updatedMsg.content !== "...") {
+              // Message has been updated with actual content
+              clearInterval(pollInterval);
+              setMessages(prev => prev.map(msg => 
+                msg.id === messageId ? updatedMsg : msg
+              ));
+              setAiThinking(false);
+              
+              // Handle ADK response if present (same logic as below)
+              if (updatedMsg.redirect_to_manual && updatedMsg.manual_analysis_params) {
+                const taskMapping = {
+                  'sea_level_rise': 'slr-risk',
+                  'urban_analysis': 'urban-area-comprehensive',
+                  'infrastructure_analysis': 'infrastructure-exposure',
+                  'topic_modeling': 'topic-modeling'
+                };
+                const manualParams = {
+                  task: taskMapping[updatedMsg.manual_analysis_params.task] || updatedMsg.manual_analysis_params.task,
+                  country: updatedMsg.manual_analysis_params.country,
+                  city: updatedMsg.manual_analysis_params.city,
+                  year1: updatedMsg.manual_analysis_params.year1,
+                  mapOption: 'OpenStreetMap'
+                };
+                if (updatedMsg.manual_analysis_params.task === 'urban_analysis') {
+                  manualParams.year2 = updatedMsg.manual_analysis_params.year2;
+                }
+                if (['sea_level_rise', 'infrastructure_analysis', 'urban_analysis'].includes(updatedMsg.manual_analysis_params.task)) {
+                  manualParams.threshold = updatedMsg.manual_analysis_params.threshold;
+                }
+                handleAnalyze(manualParams);
+              } else if (updatedMsg.dashboard_updates && updatedMsg.dashboard_updates.length > 0) {
+                const autoExecuteUpdate = updatedMsg.dashboard_updates.find(update => update.type === 'analysis_triggered' && update.auto_execute);
+                if (autoExecuteUpdate) {
+                  const taskMapping = {
+                    'sea_level_rise': 'slr-risk',
+                    'urban_analysis': 'urban-area-comprehensive',
+                    'infrastructure_analysis': 'infrastructure-exposure',
+                    'topic_modeling': 'topic-modeling'
+                  };
+                  const manualParams = {
+                    task: taskMapping[autoExecuteUpdate.analysis_type] || autoExecuteUpdate.analysis_type,
+                    country: autoExecuteUpdate.params.country,
+                    city: autoExecuteUpdate.params.city,
+                    year1: autoExecuteUpdate.params.year1,
+                    mapOption: 'OpenStreetMap'
+                  };
+                  if (autoExecuteUpdate.analysis_type === 'urban_analysis') {
+                    manualParams.year2 = autoExecuteUpdate.params.year2;
+                  }
+                  if (['sea_level_rise', 'infrastructure_analysis', 'urban_analysis'].includes(autoExecuteUpdate.analysis_type)) {
+                    manualParams.threshold = autoExecuteUpdate.params.threshold;
+                  }
+                  if (autoExecuteUpdate.analysis_type === 'topic_modeling') {
+                    manualParams.method = autoExecuteUpdate.params.method || 'lda';
+                    manualParams.nTopics = autoExecuteUpdate.params.nTopics || 10;
+                    manualParams.minDf = autoExecuteUpdate.params.minDf || 2.0;
+                    manualParams.maxDf = autoExecuteUpdate.params.maxDf || 0.95;
+                    manualParams.ngramRange = autoExecuteUpdate.params.ngramRange || '1,1';
+                    manualParams.inputType = autoExecuteUpdate.params.inputType || 'text';
+                    manualParams.textInput = autoExecuteUpdate.params.textInput || '';
+                    manualParams.files = autoExecuteUpdate.params.files || [];
+                  }
+                  handleAnalyze(manualParams);
+                } else {
+                  handleAnalyze({
+                    type: 'chat_triggered',
+                    updates: updatedMsg.dashboard_updates,
+                    analysis_type: updatedMsg.analysis_type || 'sea_level_rise'
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error polling for message update:', error);
+            clearInterval(pollInterval);
+            setAiThinking(false);
+          }
+        }, 500);
         
-        const manualParams = {
-          task: taskMapping[aiMsg.manual_analysis_params.task] || aiMsg.manual_analysis_params.task,
-          country: aiMsg.manual_analysis_params.country,
-          city: aiMsg.manual_analysis_params.city,
-          year1: aiMsg.manual_analysis_params.year1,
-          mapOption: 'OpenStreetMap'
-        };
+        // Stop polling after 60 seconds
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          setAiThinking(false);
+        }, 60000);
+      } else {
+        // Normal message, add directly
+        setMessages(prev => [...prev, aiMsg]);
+        setAiThinking(false);
         
-        // urban_analysis의 경우 year2 추가
-        if (aiMsg.manual_analysis_params.task === 'urban_analysis') {
-          manualParams.year2 = aiMsg.manual_analysis_params.year2;
-        }
-        
-        // threshold가 필요한 분석 유형에만 추가
-        if (aiMsg.manual_analysis_params.task === 'sea_level_rise' || 
-            aiMsg.manual_analysis_params.task === 'infrastructure_analysis' ||
-            aiMsg.manual_analysis_params.task === 'urban_analysis') {
-          manualParams.threshold = aiMsg.manual_analysis_params.threshold;
-        }
-        
-        console.log('🔍 [ChatPage] Calling handleAnalyze with manual params:', manualParams);
-        handleAnalyze(manualParams);
-        console.log('🔍 [ChatPage] Manual analysis params set');
-      }
-      // Handle dashboard updates if present
-      else if (aiMsg.dashboard_updates && aiMsg.dashboard_updates.length > 0) {
-        console.log('✅ Dashboard updates received:', aiMsg.dashboard_updates);
-        
-        // Check if it's an auto-execute analysis
-        const autoExecuteUpdate = aiMsg.dashboard_updates.find(update => update.type === 'analysis_triggered' && update.auto_execute);
-        if (autoExecuteUpdate) {
-          console.log('🚀 Auto-executing analysis:', autoExecuteUpdate);
+        // Handle ADK response
+        if (aiMsg.redirect_to_manual && aiMsg.manual_analysis_params) {
+          console.log('✅ ADK parameters collected, redirecting to manual analysis:', aiMsg.manual_analysis_params);
           
           // Convert ADK parameters to manual analysis format
           const taskMapping = {
@@ -207,56 +285,98 @@ function ChatPage({ token, onLogout }) {
             'topic_modeling': 'topic-modeling'
           };
           
-          // 각 분석 유형별로 필요한 파라미터만 포함
           const manualParams = {
-            task: taskMapping[autoExecuteUpdate.analysis_type] || autoExecuteUpdate.analysis_type,
-            country: autoExecuteUpdate.params.country,
-            city: autoExecuteUpdate.params.city,
-            year1: autoExecuteUpdate.params.year1,
+            task: taskMapping[aiMsg.manual_analysis_params.task] || aiMsg.manual_analysis_params.task,
+            country: aiMsg.manual_analysis_params.country,
+            city: aiMsg.manual_analysis_params.city,
+            year1: aiMsg.manual_analysis_params.year1,
             mapOption: 'OpenStreetMap'
           };
           
           // urban_analysis의 경우 year2 추가
-          if (autoExecuteUpdate.analysis_type === 'urban_analysis') {
-            manualParams.year2 = autoExecuteUpdate.params.year2;
+          if (aiMsg.manual_analysis_params.task === 'urban_analysis') {
+            manualParams.year2 = aiMsg.manual_analysis_params.year2;
           }
           
           // threshold가 필요한 분석 유형에만 추가
-          if (autoExecuteUpdate.analysis_type === 'sea_level_rise' || 
-              autoExecuteUpdate.analysis_type === 'infrastructure_analysis' ||
-              autoExecuteUpdate.analysis_type === 'urban_analysis') {
-            manualParams.threshold = autoExecuteUpdate.params.threshold;
+          if (aiMsg.manual_analysis_params.task === 'sea_level_rise' || 
+              aiMsg.manual_analysis_params.task === 'infrastructure_analysis' ||
+              aiMsg.manual_analysis_params.task === 'urban_analysis') {
+            manualParams.threshold = aiMsg.manual_analysis_params.threshold;
           }
           
-          // topic_modeling의 경우 특별한 파라미터들 추가
-          if (autoExecuteUpdate.analysis_type === 'topic_modeling') {
-            manualParams.method = autoExecuteUpdate.params.method || 'lda';
-            manualParams.nTopics = autoExecuteUpdate.params.nTopics || 10;
-            manualParams.minDf = autoExecuteUpdate.params.minDf || 2.0;
-            manualParams.maxDf = autoExecuteUpdate.params.maxDf || 0.95;
-            manualParams.ngramRange = autoExecuteUpdate.params.ngramRange || '1,1';
-            manualParams.inputType = autoExecuteUpdate.params.inputType || 'text';
-            manualParams.textInput = autoExecuteUpdate.params.textInput || '';
-            manualParams.files = autoExecuteUpdate.params.files || [];
-          }
-          
-          console.log('🔍 [ChatPage] Auto-executing with manual params:', manualParams);
+          console.log('🔍 [ChatPage] Calling handleAnalyze with manual params:', manualParams);
           handleAnalyze(manualParams);
-        } else {
-          console.log('🔍 [ChatPage] Calling handleAnalyze with:', {
-            type: 'chat_triggered',
-            updates: aiMsg.dashboard_updates,
-            analysis_type: aiMsg.analysis_type || 'sea_level_rise'
-          });
-          handleAnalyze({
-            type: 'chat_triggered',
-            updates: aiMsg.dashboard_updates,
-            analysis_type: aiMsg.analysis_type || 'sea_level_rise'
-          });
+          console.log('🔍 [ChatPage] Manual analysis params set');
         }
-        console.log('🔍 [ChatPage] handleAnalyze called, params should be updated');
-      } else {
-        console.log('❌ [ChatPage] No dashboard updates or manual redirect in AI message');
+        // Handle dashboard updates if present
+        else if (aiMsg.dashboard_updates && aiMsg.dashboard_updates.length > 0) {
+          console.log('✅ Dashboard updates received:', aiMsg.dashboard_updates);
+          
+          // Check if it's an auto-execute analysis
+          const autoExecuteUpdate = aiMsg.dashboard_updates.find(update => update.type === 'analysis_triggered' && update.auto_execute);
+          if (autoExecuteUpdate) {
+            console.log('🚀 Auto-executing analysis:', autoExecuteUpdate);
+            
+            // Convert ADK parameters to manual analysis format
+            const taskMapping = {
+              'sea_level_rise': 'slr-risk',
+              'urban_analysis': 'urban-area-comprehensive',
+              'infrastructure_analysis': 'infrastructure-exposure',
+              'topic_modeling': 'topic-modeling'
+            };
+            
+            // 각 분석 유형별로 필요한 파라미터만 포함
+            const manualParams = {
+              task: taskMapping[autoExecuteUpdate.analysis_type] || autoExecuteUpdate.analysis_type,
+              country: autoExecuteUpdate.params.country,
+              city: autoExecuteUpdate.params.city,
+              year1: autoExecuteUpdate.params.year1,
+              mapOption: 'OpenStreetMap'
+            };
+            
+            // urban_analysis의 경우 year2 추가
+            if (autoExecuteUpdate.analysis_type === 'urban_analysis') {
+              manualParams.year2 = autoExecuteUpdate.params.year2;
+            }
+            
+            // threshold가 필요한 분석 유형에만 추가
+            if (autoExecuteUpdate.analysis_type === 'sea_level_rise' || 
+                autoExecuteUpdate.analysis_type === 'infrastructure_analysis' ||
+                autoExecuteUpdate.analysis_type === 'urban_analysis') {
+              manualParams.threshold = autoExecuteUpdate.params.threshold;
+            }
+            
+            // topic_modeling의 경우 특별한 파라미터들 추가
+            if (autoExecuteUpdate.analysis_type === 'topic_modeling') {
+              manualParams.method = autoExecuteUpdate.params.method || 'lda';
+              manualParams.nTopics = autoExecuteUpdate.params.nTopics || 10;
+              manualParams.minDf = autoExecuteUpdate.params.minDf || 2.0;
+              manualParams.maxDf = autoExecuteUpdate.params.maxDf || 0.95;
+              manualParams.ngramRange = autoExecuteUpdate.params.ngramRange || '1,1';
+              manualParams.inputType = autoExecuteUpdate.params.inputType || 'text';
+              manualParams.textInput = autoExecuteUpdate.params.textInput || '';
+              manualParams.files = autoExecuteUpdate.params.files || [];
+            }
+            
+            console.log('🔍 [ChatPage] Auto-executing with manual params:', manualParams);
+            handleAnalyze(manualParams);
+          } else {
+            console.log('🔍 [ChatPage] Calling handleAnalyze with:', {
+              type: 'chat_triggered',
+              updates: aiMsg.dashboard_updates,
+              analysis_type: aiMsg.analysis_type || 'sea_level_rise'
+            });
+            handleAnalyze({
+              type: 'chat_triggered',
+              updates: aiMsg.dashboard_updates,
+              analysis_type: aiMsg.analysis_type || 'sea_level_rise'
+            });
+          }
+          console.log('🔍 [ChatPage] handleAnalyze called, params should be updated');
+        } else {
+          console.log('❌ [ChatPage] No dashboard updates or manual redirect in AI message');
+        }
       }
     } catch (e) {
       console.error('Error sending message:', e);
@@ -324,8 +444,9 @@ function ChatPage({ token, onLogout }) {
           {/* Show analytics based on params */}
           {!params && <div style={{ color: '#888', textAlign: 'center', marginTop: 100 }}>Select analysis options and click "Analyze it" to view analytics.</div>}
           {params && (params.task === 'slr-risk' || params.analysis_type === 'sea_level_rise') && <MapDisplay params={params} />}
-          {params && params.task === 'urban-area-comprehensive' && <><MapDisplay params={params} /><UrbanAreaComprehensiveCharts startYear={params.year1} endYear={params.year2} /></>}
-          {params && params.task === 'infrastructure-exposure' && <InfrastructureExposure year={params.year1} threshold={params.threshold} city={params.city} />}
+          {params && params.task === 'urban-area-stats' && <UrbanAreaCharts year={params.year1} onYearChange={handleYearChange} />}
+          {params && params.task === 'urban-area-comprehensive' && <><MapDisplay params={params} /><UrbanAreaComprehensiveCharts startYear={params.year1} endYear={params.year2} onYearChange={handleYearChange} /></>}
+          {params && params.task === 'infrastructure-exposure' && <InfrastructureExposure year={params.year1} threshold={params.threshold} city={params.city} onYearChange={handleYearChange} />}
           {params && params.task === 'topic-modeling' && <TopicModeling params={params || {}} />}
         </Box>
       </Panel>
